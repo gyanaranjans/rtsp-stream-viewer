@@ -99,15 +99,25 @@ cd frontend && bun run build && bun run lint
 
 ## Deployment
 
-The Dockerfile builds a single service: the backend, the frontend and a demo MediaMTX server. It can be deployed as-is to Railway or Render (Docker runtime). In the deployed app, the demo streams `rtsp://localhost:8554/…` resolve inside the container.
+### Vercel (live demo)
 
-### Frontend on Vercel, backend on a container host
+`Dockerfile.vercel` at the repo root is auto-detected by Vercel and deployed as a [container-image Function](https://vercel.com/docs/functions/container-images). It contains the Go backend, FFmpeg, the built React app and the demo MediaMTX server. Vercel Functions on Fluid Compute support [WebSockets](https://vercel.com/kb/guide/do-vercel-serverless-functions-support-websocket-connections) (public beta).
 
-Vercel Functions are short-lived and can't hold WebSocket connections or keep FFmpeg running, so the backend must run on a container host (Railway, Render, Fly.io). The frontend can go on Vercel:
+To deploy: import the repo at vercel.com/new with Root Directory = repo root, then click Deploy. No env vars are needed.
 
-1. Deploy the Dockerfile to the container host and note its public URL.
-2. In Vercel, import the repo with **Root Directory** = `frontend/` (`frontend/vercel.json` covers the build), and set the env var `VITE_BACKEND_URL=https://<backend-host>`.
-3. On the backend, set `ALLOWED_ORIGINS=<your-app>.vercel.app`.
+Platform limits and how the app handles them:
+
+- WebSocket connections are closed at the function's maximum duration (300 s on Hobby). The player reconnects automatically, so this shows up as a brief "Reconnecting" blip.
+- Each instance runs its own FFmpeg processes and demo server. Viewers are only shared within one instance.
+- Instances scale down after 5 minutes without traffic; the next visit cold-starts.
+
+### Railway / Render / Fly / any Docker host
+
+`Dockerfile` is the same image listening on `:8080`. Deploy it as-is: it serves the frontend and the demo streams. Long-lived containers avoid the WebSocket duration limit.
+
+### Frontend separately
+
+Build `frontend/` with `VITE_BACKEND_URL=https://<backend-host>` (`frontend/vercel.json` covers this on Vercel), and set `ALLOWED_ORIGINS` on the backend to the frontend's domain.
 
 ## Notes and trade-offs
 
