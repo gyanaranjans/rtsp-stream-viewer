@@ -31,6 +31,19 @@ export function StreamTile({ stream, onRemove }: { stream: Stream; onRemove: () 
     return () => player.stop()
   }, [stream.url])
 
+  // A background tab still downloads full video; drop the connection while
+  // hidden and rejoin at the live edge when the user comes back.
+  useEffect(() => {
+    if (!playing) return
+    const onVisibility = () => {
+      const player = playerRef.current!
+      if (document.hidden) player.stop('paused')
+      else player.start()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [playing])
+
   const toggle = () => {
     const player = playerRef.current!
     if (playing) player.stop('paused')

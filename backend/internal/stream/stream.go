@@ -287,6 +287,8 @@ func (s *Stream) ffmpegArgs() []string {
 	if transcode {
 		args = append(args, "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
 			"-profile:v", "main", "-pix_fmt", "yuv420p", "-g", "50", "-keyint_min", "25",
+			// Bound egress per viewer; uncapped x264 on noisy sources runs several Mbit/s.
+			"-maxrate", "1500k", "-bufsize", "3000k",
 			"-vf", "scale='min(1280,iw)':-2")
 	} else {
 		args = append(args, "-c:v", "copy")

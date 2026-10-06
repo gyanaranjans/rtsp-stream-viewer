@@ -125,5 +125,6 @@ Build `frontend/` with `VITE_BACKEND_URL=https://<backend-host>` (`frontend/verc
 
 - Only video is streamed (`-an`); audio is dropped. This keeps fragments keyframe-aligned and simplifies the MSE setup.
 - Many "public RTSP test URLs" found online are dead (NXDOMAIN, timeouts, refused). `rtsp://stream.strba.sk:1935/strba/VYHLAD_JAZERO.stream` (a lake webcam, H.264 720p, ~2.7 s GOP) worked when this was written and is included in the demo set. Use `ffprobe -rtsp_transport tcp <url>` to check whether a URL is reachable at all.
+- **Hosting cost.** Video dominates. One viewer of all demo tiles is ~1.5 Mbit/s (≈0.7 GB/hour), most of it the real camera. The synthetic sources were originally 7+ Mbit/s each. They are now capped at 640x360@15fps/300 kbit/s and only encode while watched (`runOnDemand`). Tabs in the background disconnect. Server-side H.265→H.264 transcoding is capped at 1.5 Mbit/s.
 - Latency is about one GOP (≈1 s for the demo streams). Cameras with long GOPs will have proportionally higher latency. Lowering it further would need WebRTC, or fragments split mid-GOP plus keyframe tracking.
 - The backend opens any RTSP URL a user submits. In production, add authentication and a host allowlist to prevent SSRF.
