@@ -56,7 +56,7 @@ Dockerfile                 backend + frontend + MediaMTX in one image
 Requirements: Go 1.25 or newer, Bun (or Node 20+), FFmpeg, and MediaMTX (`brew install ffmpeg mediamtx`).
 
 ```bash
-# 1. Test RTSP streams at rtsp://localhost:8554/{testsrc,smpte,mandelbrot,hevc}
+# 1. Test RTSP streams at rtsp://localhost:8554/{testsrc,smpte,life,hevc}
 mediamtx scripts/mediamtx.yml
 
 # 2. Backend on :8080
@@ -122,5 +122,6 @@ Build `frontend/` with `VITE_BACKEND_URL=https://<backend-host>` (`frontend/verc
 ## Notes and trade-offs
 
 - Only video is streamed (`-an`); audio is dropped. This keeps fragments keyframe-aligned and simplifies the MSE setup.
+- Many "public RTSP test URLs" found online are dead (NXDOMAIN, timeouts, refused). `rtsp://stream.strba.sk:1935/strba/VYHLAD_JAZERO.stream` (a lake webcam, H.264 720p, ~2.7 s GOP) worked when this was written and is included in the demo set. Use `ffprobe -rtsp_transport tcp <url>` to check whether a URL is reachable at all.
 - Latency is about one GOP (≈1 s for the demo streams). Cameras with long GOPs will have proportionally higher latency. Lowering it further would need WebRTC, or fragments split mid-GOP plus keyframe tracking.
 - The backend opens any RTSP URL a user submits. In production, add authentication and a host allowlist to prevent SSRF.

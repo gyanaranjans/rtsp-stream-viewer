@@ -6,10 +6,10 @@ export function wsUrlFor(rtspUrl: string) {
   return `${base.replace(/^http/, 'ws')}/ws?url=${encodeURIComponent(rtspUrl)}`
 }
 
-// Test streams published by the bundled MediaMTX next to the backend.
+// A public camera plus test streams published by the bundled MediaMTX next to the backend.
 export const DEMO_STREAMS: string[] = (
   (import.meta.env.VITE_DEMO_STREAMS as string | undefined) ??
-  'rtsp://localhost:8554/testsrc,rtsp://localhost:8554/smpte,rtsp://localhost:8554/mandelbrot,rtsp://localhost:8554/hevc'
+  'rtsp://stream.strba.sk:1935/strba/VYHLAD_JAZERO.stream,rtsp://localhost:8554/testsrc,rtsp://localhost:8554/smpte,rtsp://localhost:8554/life,rtsp://localhost:8554/hevc'
 )
   .split(',')
   .map((s) => s.trim())

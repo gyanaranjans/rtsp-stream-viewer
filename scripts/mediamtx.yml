@@ -20,9 +20,12 @@ paths:
       -c:v libx264 -preset ultrafast -tune zerolatency -g 25 -pix_fmt yuv420p
       -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes
-  mandelbrot:
+  # Conway's Game of Life: cheap to render, unlike lavfi life whose per-frame
+  # cost grows as it zooms until it can no longer keep real time.
+  life:
     runOnInit: >-
-      ffmpeg -hide_banner -loglevel error -re -f lavfi -i mandelbrot=size=640x360:rate=25
+      ffmpeg -hide_banner -loglevel error -re -f lavfi
+      -i life=size=320x180:rate=25:mold=10:ratio=0.1:death_color=#202060:life_color=#40ff80,scale=960:540:flags=neighbor
       -c:v libx264 -preset ultrafast -tune zerolatency -g 25 -pix_fmt yuv420p
       -f rtsp rtsp://localhost:$RTSP_PORT/$MTX_PATH
     runOnInitRestart: yes

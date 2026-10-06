@@ -18,7 +18,8 @@ type ServerEvent =
   | { type: 'init'; codec: string }
   | { type: 'error'; message: string }
 
-// Keep latency low: if we drift this far behind the live edge, jump forward.
+// Minimum lag tolerated before jumping to the live edge. The real threshold
+// scales with fragment (GOP) length, since cameras commonly use 2-4 s GOPs.
 const MAX_LATENCY_SEC = 2.5
 const BUFFER_KEEP_SEC = 10
 const MAX_RETRY_DELAY_MS = 15_000
@@ -38,6 +39,9 @@ export class StreamPlayer {
   private sb?: SourceBuffer
   private objectUrl?: string
   private queue: ArrayBuffer[] = []
+  // Buffered end before the in-flight append = start time of that fragment,
+  // which is always a keyframe and therefore a cheap seek target.
+  private appendStart: number | null = null
   private stopped = true
   private retries = 0
   private retryTimer?: number
@@ -176,6 +180,7 @@ export class StreamPlayer {
     const sb = this.sb
     if (!sb || sb.updating || this.queue.length === 0) return
     try {
+      this.appendStart = sb.buffered.length ? sb.buffered.end(sb.buffered.length - 1) : 0
       sb.appendBuffer(this.queue.shift()!)
     } catch (err) {
       if ((err as DOMException).name === 'QuotaExceededError') {
@@ -192,12 +197,21 @@ export class StreamPlayer {
     const sb = this.sb
     if (!sb) return
     const v = this.video
-    if (sb.buffered.length) {
+    const fragStart = this.appendStart
+    this.appendStart = null // also null for updateend events caused by remove()
+    if (fragStart !== null && sb.buffered.length) {
       const end = sb.buffered.end(sb.buffered.length - 1)
       const start = sb.buffered.start(sb.buffered.length - 1)
-      if (v.currentTime < start || end - v.currentTime > MAX_LATENCY_SEC) {
-        v.currentTime = Math.max(start, end - 0.3)
-      }
+      const keyframe = Math.max(start, fragStart)
+      // Seeking mid-GOP forces the decoder to re-decode from the previous keyframe;
+      // doing that on every fragment of a long-GOP stream stalls playback forever.
+      // So only jump when more than ~two fragments behind, and land on a keyframe.
+      const maxLag = Math.max(MAX_LATENCY_SEC, 2 * (end - keyframe) + 0.5)
+      const lag = end - v.currentTime
+      if (v.currentTime < start || lag > maxLag) v.currentTime = keyframe
+      // Gently drain smaller drift (camera clock slightly fast, network bursts)
+      // instead of letting it build up to a visible jump.
+      else v.playbackRate = lag > (end - keyframe) + 0.5 ? 1.1 : 1
       if (v.paused) v.play().catch(() => {})
     }
     if (!this.trim(false)) this.flush()
