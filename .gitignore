@@ -5,3 +5,5 @@ dist/
 .env.local
 .DS_Store
 backend/server
+auto.crt
+auto.key
