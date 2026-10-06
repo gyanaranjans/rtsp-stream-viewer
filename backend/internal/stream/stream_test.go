@@ -57,10 +57,13 @@ func TestFriendlyError(t *testing.T) {
 	cases := map[string]string{
 		"rtsp://x/y: Server returned 404 Not Found":            "stream not found on server (404)",
 		"Connection to tcp://h:554 failed: Connection refused": "connection refused — is the RTSP server running?",
-		"something odd": "something odd",
+		"[tcp @ 0x1] Failed to resolve hostname cam.example: nodename nor servname provided\nrtsp://u:p@cam.example/s: Input/output error": "host unreachable or could not be resolved — check the hostname",
+	}
+	if _, ok := friendlyError("something odd"); ok {
+		t.Error("unknown output should not match")
 	}
 	for in, want := range cases {
-		if got := friendlyError(in); got != want {
+		if got, _ := friendlyError(in); got != want {
 			t.Errorf("friendlyError(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -199,6 +202,30 @@ func TestConnectionErrorReported(t *testing.T) {
 		case msg := <-sub.C:
 			if msg.Event != nil && msg.Event.State == StateReconnecting {
 				if !strings.Contains(msg.Event.Message, "refused") {
+					t.Fatalf("unexpected message %q", msg.Event.Message)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("no reconnecting status")
+		}
+	}
+}
+
+func TestUnresolvableHostDoesNotLeakCredentials(t *testing.T) {
+	m := testManager()
+	defer m.Shutdown()
+	sub, _ := m.Subscribe("rtsp://secretuser:secretpw@nonexistent-host.invalid:554/s")
+	defer sub.Close()
+	deadline := time.After(20 * time.Second)
+	for {
+		select {
+		case msg := <-sub.C:
+			if msg.Event != nil && msg.Event.State == StateReconnecting {
+				if strings.Contains(msg.Event.Message, "secretpw") {
+					t.Fatalf("credentials leaked: %q", msg.Event.Message)
+				}
+				if !strings.Contains(msg.Event.Message, "could not be resolved") {
 					t.Fatalf("unexpected message %q", msg.Event.Message)
 				}
 				return

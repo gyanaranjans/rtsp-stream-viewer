@@ -150,7 +150,7 @@ func newStream(url string, m *Manager) *Stream {
 func (s *Stream) info() StreamInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return StreamInfo{URL: s.url, State: s.state, Codec: s.codec, Transcoding: s.transcode,
+	return StreamInfo{URL: redact(s.url), State: s.state, Codec: s.codec, Transcoding: s.transcode,
 		Subscribers: len(s.subs), Restarts: s.restarts}
 }
 
@@ -306,7 +306,7 @@ func (s *Stream) runFFmpeg() error {
 	if err != nil {
 		return err
 	}
-	stderr := &tailBuffer{max: 4}
+	stderr := &tailBuffer{max: 8}
 	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("failed to start ffmpeg: %w", err)
@@ -338,8 +338,12 @@ func (s *Stream) runFFmpeg() error {
 	if errors.Is(readErr, errNoCodec) {
 		return readErr
 	}
+	if msg, ok := friendlyError(stderr.All()); ok {
+		return errors.New(msg)
+	}
 	if line := stderr.Last(); line != "" {
-		return errors.New(friendlyError(line))
+		// Raw FFmpeg output often echoes the input URL; never leak its credentials.
+		return errors.New(strings.ReplaceAll(line, s.url, redact(s.url)))
 	}
 	if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrUnexpectedEOF) {
 		return readErr
@@ -392,24 +396,24 @@ func (s *Stream) pump(r io.Reader, alive chan<- struct{}) error {
 }
 
 // friendlyError maps common FFmpeg failure output to something a user can act on.
-func friendlyError(line string) string {
-	l := strings.ToLower(line)
+func friendlyError(output string) (string, bool) {
+	l := strings.ToLower(output)
 	switch {
-	case strings.Contains(l, "404") || strings.Contains(l, "not found"):
-		return "stream not found on server (404)"
-	case strings.Contains(l, "400 bad request"):
-		return "server rejected the request (400) — check the stream path"
-	case strings.Contains(l, "401") || strings.Contains(l, "unauthorized"):
-		return "authentication failed (401) — check credentials in the URL"
-	case strings.Contains(l, "connection refused"):
-		return "connection refused — is the RTSP server running?"
-	case strings.Contains(l, "timed out") || strings.Contains(l, "timeout"):
-		return "connection timed out"
 	case strings.Contains(l, "no route to host") || strings.Contains(l, "name or service not known") ||
 		strings.Contains(l, "nodename nor servname") || strings.Contains(l, "failed to resolve"):
-		return "host unreachable or could not be resolved"
+		return "host unreachable or could not be resolved — check the hostname", true
+	case strings.Contains(l, "404") || strings.Contains(l, "not found"):
+		return "stream not found on server (404)", true
+	case strings.Contains(l, "400 bad request"):
+		return "server rejected the request (400) — check the stream path", true
+	case strings.Contains(l, "401") || strings.Contains(l, "unauthorized"):
+		return "authentication failed (401) — check credentials in the URL", true
+	case strings.Contains(l, "connection refused"):
+		return "connection refused — is the RTSP server running?", true
+	case strings.Contains(l, "timed out") || strings.Contains(l, "timeout"):
+		return "connection timed out", true
 	}
-	return line
+	return "", false
 }
 
 // tailBuffer keeps the last few non-empty lines written to it.
@@ -434,6 +438,13 @@ func (t *tailBuffer) Write(p []byte) (int, error) {
 		t.lines = t.lines[len(t.lines)-t.max:]
 	}
 	return len(p), nil
+}
+
+// All returns every retained line, for pattern matching.
+func (t *tailBuffer) All() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return strings.Join(t.lines, "\n") + "\n" + t.part
 }
 
 // Last returns the most informative recent line, preferring the error cause

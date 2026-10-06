@@ -101,10 +101,13 @@ cd frontend && bun run build && bun run lint
 
 The Dockerfile builds a single service: the backend, the frontend and a demo MediaMTX server. It can be deployed as-is to Railway or Render (Docker runtime). In the deployed app, the demo streams `rtsp://localhost:8554/…` resolve inside the container.
 
-To host the frontend separately (e.g. Vercel):
+### Frontend on Vercel, backend on a container host
 
-- Build `frontend/` with `VITE_BACKEND_URL=https://<backend-host>`.
-- Set `ALLOWED_ORIGINS` on the backend to the frontend's domain.
+Vercel Functions are short-lived and can't hold WebSocket connections or keep FFmpeg running, so the backend must run on a container host (Railway, Render, Fly.io). The frontend can go on Vercel:
+
+1. Deploy the Dockerfile to the container host and note its public URL.
+2. In Vercel, import the repo with **Root Directory** = `frontend/` (`frontend/vercel.json` covers the build), and set the env var `VITE_BACKEND_URL=https://<backend-host>`.
+3. On the backend, set `ALLOWED_ORIGINS=<your-app>.vercel.app`.
 
 ## Notes and trade-offs
 
