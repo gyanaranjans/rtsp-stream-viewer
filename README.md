@@ -2,6 +2,8 @@
 
 Add RTSP camera URLs in the browser and watch them live, side by side in a grid.
 
+**Live demo:** https://gyana-rtsp-viewer.vercel.app (click **Load demo streams**). No login needed.
+
 - **Frontend:** React 19, TypeScript, Vite. Video plays through Media Source Extensions.
 - **Backend:** Go. FFmpeg turns each RTSP source into fragmented MP4, and the backend sends it to browsers over WebSockets.
 - **Test streams:** MediaMTX, with FFmpeg generating synthetic sources (H.264 and H.265).
